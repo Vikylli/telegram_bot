@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Обсуждаем вместе</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    button { margin: 10px; padding: 10px 20px; }
+    #question { margin-top: 20px; font-size: 18px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h2>Выбери тему для обсуждения:</h2>
+  <button onclick="loadQuestions('дружба')">Дружба</button>
+  <button onclick="loadQuestions('семья')">Семья</button>
+  <button onclick="loadQuestions('жизненные ценности')">Ценности</button>
+
+  <div id="question">Здесь появится вопрос...</div>
+
+  <script>
+    function loadQuestions(category) {
+      fetch(`/get-question?category=${encodeURIComponent(category)}`)
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById('question').innerText = data.question;
+          // Отправляем вопрос в Telegram через WebApp
+          if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.sendData(JSON.stringify({
+              category: category,
+              question: data.question
+            }));
+          }
+        })
+        .catch(err => console.error("Ошибка:", err));
+    }
+  </script>
+</body>
+</html>

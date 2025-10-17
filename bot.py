@@ -1,69 +1,45 @@
-import os
-import random
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import logging
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.storage.memory import MemoryStorage
-import asyncio
-from dotenv import load_dotenv
-from questions import QUESTIONS, CATEGORIES
+import json
 
-load_dotenv()
-BOT_TOKEN = os.getenv('8477738633:AAG0hYk0zo49_ANYl3tLqCPw6Kuzvl6B1m4')
-WEBAPP_URL = "https://telegram-bot-9vk9.onrender.com"  # Замените на ваш URL
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(storage=MemoryStorage())
-logging.basicConfig(level=logging.INFO)
+TOKEN = "8477738633:AAG0hYk0zo49_ANYl3tLqCPw6Kuzvl6B1m4"
 
-class QuestionStates(StatesGroup):
-    waiting_category = State()
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("Начать игру", web_app={"url": " https://telegram-bot-9vk9.onrender.com."})]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("Привет! Нажми кнопку, чтобы начать игру и получить вопрос для обсуждения.", reply_markup=reply_markup)
 
-@dp.message(Command("start"))
-async def start_handler(message: types.Message):
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Открыть Mini App", web_app=WebAppInfo(url=WEBAPP_URL))],
-        *[ [InlineKeyboardButton(text=cat, callback_data=f"cat_{cat}")] for cat in CATEGORIES[:3] ],  # Первые 3 для примера
-        [InlineKeyboardButton(text="Случайный вопрос", callback_data="random")]
-    ])
-    await message.answer(
-        "Привет! Это бот для обсуждения вопросов. Выбери категорию или открой Mini App для интерактивного выбора.\n"
-        "В групповом чате используй /question [категория] для генерации вопроса.",
-        reply_markup=keyboard
-    )
+# Обработка сообщений с данными от Web App
+async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message and update.message.web_app_data:
+        data = update.message.web_app_data.data
+        try:
+            parsed = json.loads(data)
+            category = parsed.get('category', 'неизвестная тема')
+            question = parsed.get('question', 'Вопрос не загрузился :(')
+            
+            await update.message.reply_text(
+                f"Тема: *{category}*\n\nВопрос:\n{question}\n\nОбсудите его в чате!",
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка при обработке данных: {e}")
 
-@dp.callback_query(lambda c: c.data.startswith("cat_"))
-async def category_callback(callback: types.CallbackQuery):
-    cat = callback.data.split("_")[1]
-    question = random.choice(QUESTIONS[cat])
-    await callback.message.answer(f"Категория: {cat}\nВопрос: {question}")
-    await callback.answer()
+def main():
+    application = Application.builder().token(TOKEN).build()
 
-@dp.callback_query(lambda c: c.data == "random")
-async def random_question(callback: types.CallbackQuery):
-    all_questions = [q for cats in QUESTIONS.values() for q in cats]
-    question = random.choice(all_questions)
-    await callback.message.answer(f"Случайный вопрос: {question}")
-    await callback.answer()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_webapp_data))
 
-@dp.message(Command("question"))
-async def question_handler(message: types.Message):
-    args = message.text.split()[1:] if len(message.text.split()) > 1 else []
-    if not args:
-        await message.answer("Укажи категорию: /question дружба")
-        return
-    cat = args[0].lower().replace(" ", "_")
-    if cat in QUESTIONS:
-        question = random.choice(QUESTIONS[cat])
-        await message.answer(f"Категория: {cat}\nВопрос для обсуждения: {question}")
-    else:
-        await message.answer(f"Неизвестная категория. Доступны: {', '.join(CATEGORIES)}")
+    application.run_polling()
 
-async def main():
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+if __name__ == '__main__':
+    main()
